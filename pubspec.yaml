@@ -1,0 +1,35 @@
+name: sc
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_doc_scanner: ^0.0.17
+  path_provider: ^2.1.5
+  cupertino_icons: ^1.0.8
+  open_file: ^3.5.11
+  permission_handler: ^12.0.1
+  intl: ^0.19.0
+  firebase_core: ^4.4.0
+  cloud_firestore: ^6.1.2
+  firebase_auth: ^6.1.4
+  share_plus: ^12.0.1
+  cross_file: ^0.3.5+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+
+  flutter_lints: ^6.0.0
+
+flutter:
+
+  uses-material-design: true
+
+#  assets:
