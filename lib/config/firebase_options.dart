@@ -87,4 +87,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'receiptscanner-bf686.firebasestorage.app',
     measurementId: 'G-BDCLK36XDL',
   );
+
 }
