@@ -4,6 +4,7 @@ class AuthService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   User? get currentUser => _auth.currentUser;
+
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   // Email/Password Login
@@ -36,17 +37,6 @@ class AuthService {
       );
 
       return result;
-    } on FirebaseAuthException catch (e) {
-      throw _handleAuthException(e);
-    } catch (e) {
-      throw 'An unexpected error occurred: $e';
-    }
-  }
-
-  // Password Reset
-  Future<void> sendPasswordResetEmail({required String email}) async {
-    try {
-      await _auth.sendPasswordResetEmail(email: email);
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
     } catch (e) {

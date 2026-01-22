@@ -56,6 +56,7 @@ class ScannerService {
         receiptName: 'Scan_${DateTime.now().millisecondsSinceEpoch}',
         pdfBase64: downloadUrl,
         staffId: currentUser.uid,
+        staffName: currentUser.displayName ?? 'Unknown',
         description: 'Scanned via App',
         createdAt: DateTime.now(),
       );

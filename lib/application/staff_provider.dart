@@ -38,4 +38,19 @@ class StaffProvider extends ChangeNotifier {
       _setLoading(false);
     }
   }
+
+  Future <void> updateStaffName(String newName) async {
+    String oldName = _currentStaff?.staffName ?? "";
+
+    _currentStaff = _currentStaff!.copyWith(staffName: newName);
+    notifyListeners();
+    try{
+      final staff = await _staffRepository.updateStaffName(newName);
+    } catch (e) {
+      _currentStaff = _currentStaff!.copyWith(staffName: oldName);
+      _setError('Failed to save staff name: $e');
+      notifyListeners();
+    }
+  }
+
 }

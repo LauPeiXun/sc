@@ -35,7 +35,7 @@ class AuthRepository {
 
       String? uid = credential?.user!.uid;
 
-      // Create staff record in Firestore
+      // Create staff in Firestore
       if (uid != null) {
         await FirebaseFirestore.instance.collection('staff').doc(uid).set({
           'email': email,
@@ -43,15 +43,9 @@ class AuthRepository {
           'staffName': '',
           'profilePicUrl': '',
           'createdAt': FieldValue.serverTimestamp(),
-        }).then((_) {
-          print("Staff profile created successfully for user: $uid");
-        }).catchError((e) {
-          print("Error creating staff profile: $e");
-          throw Exception("Failed to create staff profile: $e");
         });
       }
 
-      print("User registered and Staff profile created successfully!");
       return credential?.user;
 
     } catch (e) {

@@ -2,13 +2,11 @@ class Staff {
   final String staffId;
   final String staffName;
   final String email;
-  final String profilePicUrl;
 
   Staff({
     required this.staffId,
     required this.staffName,
     required this.email,
-    required this.profilePicUrl,
   });
 
   factory Staff.fromJson(Map<String, dynamic> json){
@@ -16,7 +14,6 @@ class Staff {
         staffId: json['staffId'] ?? json['staffId'] ?? '',
         staffName: json['staffName'] ?? '',
         email: json['email'] ?? '',
-        profilePicUrl: json['profilePicUrl'] ?? ''
     );
   }
 
@@ -25,7 +22,19 @@ class Staff {
       'staffId': staffId,
       'staffName': staffName,
       'email': email,
-      'profilePicUrl': profilePicUrl,
     };
   }
+
+  Staff copyWith({
+    String? staffId,
+    String? staffName,
+    String? email,
+  }) {
+    return Staff(
+      staffId: staffId ?? this.staffId,
+      staffName: staffName ?? this.staffName,
+      email: email ?? this.email,
+    );
+  }
+
 }

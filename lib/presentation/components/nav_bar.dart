@@ -2,53 +2,47 @@ import 'package:flutter/material.dart';
 
 class NavBar extends StatelessWidget {
   final int currentIndex;
+  final Function(int) onTap;
 
-  const NavBar({super.key, required this.currentIndex});
-
-  void _onTabSelected(BuildContext context, int index) {
-    if (index == currentIndex) return;
-
-    // switch (index) {
-    //   case 0:
-    //     Navigator.pushReplacement(
-    //         context, MaterialPageRoute(builder: (_) => const ReportPage()));
-    //     break;
-    //   case 1:
-    //     Navigator.pushReplacement(
-    //         context, MaterialPageRoute(builder: (_) => const ScannerPage()));
-    //     break;
-    //   case 2:
-    //     Navigator.pushReplacement(
-    //         context, MaterialPageRoute(builder: (_) => const ProfilePage()));
-    //     break;
-    // }
-  }
+  const NavBar({
+    super.key,
+    required this.currentIndex,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return BottomAppBar(
-      shape: const CircularNotchedRectangle(),
-      notchMargin: 8,
-      color: Colors.white,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _navIcon(context, Icons.search, 0),
-          _navIcon(context, Icons.inventory, 1),
-          _navIcon(context, Icons.qr_code_scanner, 2),
-          _navIcon(context, Icons.dashboard, 3),
-          _navIcon(context, Icons.person, 4),
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Colors.black, width: 2)),
+      ),
+      child: BottomNavigationBar(
+        backgroundColor: Colors.white,
+        selectedItemColor: Colors.black,
+        unselectedItemColor: Colors.grey,
+        currentIndex: currentIndex,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        elevation: 0,
+        onTap: onTap,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.assessment_outlined),
+            activeIcon: Icon(Icons.assessment),
+            label: 'Report',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.camera_alt_outlined, size: 36),
+            activeIcon: Icon(Icons.camera_alt, size: 36),
+            label: 'Scan',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
         ],
       ),
-    );
-  }
-
-  Widget _navIcon(BuildContext context, IconData icon, int index) {
-    return IconButton(
-      icon: Icon(icon),
-      iconSize:  30.0,
-      color: currentIndex == index ? Colors.green : Colors.grey,
-      onPressed: () => _onTabSelected(context, index),
     );
   }
 }

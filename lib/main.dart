@@ -10,12 +10,11 @@ import 'application/auth_provider.dart';
 import 'application/receipt_provider.dart';
 import 'data/repositories/auth_repository.dart';
 import 'service/firebase_auth_service.dart';
+import 'application/staff_provider.dart';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  
-  // 等待 Firebase Auth 恢复本地会话
   await FirebaseAuth.instance.authStateChanges().first;
   
   runApp(const MyApp());
@@ -37,6 +36,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider<ReceiptProvider>(
           create: (_) => ReceiptProvider(),
         ),
+        ChangeNotifierProvider(create: (_) => StaffProvider()),
       ],
       child: MaterialApp(
         title: 'Receipt Scanner',

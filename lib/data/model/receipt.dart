@@ -5,6 +5,7 @@ class Receipt {
   final String receiptName;
   final String pdfBase64;
   final String staffId;
+  final String staffName;
   final String description;
   final DateTime createdAt;
 
@@ -13,6 +14,7 @@ class Receipt {
     required this.receiptName,
     required this.pdfBase64,
     required this.staffId,
+    required this.staffName,
     required this.description,
     required this.createdAt,
   });
@@ -23,6 +25,7 @@ class Receipt {
         receiptName: json['receiptName'] ?? '',
         pdfBase64: json['pdfBase64'] ?? '',
         staffId: json['staffId'] ?? '',
+        staffName: json['staffName'] ?? '',
         description: json['description'] ?? '',
         createdAt: json['createdAt'] is Timestamp
             ? (json['createdAt'] as Timestamp).toDate()
@@ -36,6 +39,7 @@ class Receipt {
       'receiptName': receiptName,
       'pdfBase64': pdfBase64,
       'staffId': staffId,
+      'staffName': staffName,
       'description': description,
       'createdAt': Timestamp.fromDate(createdAt)
     };
