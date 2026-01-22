@@ -1,70 +1,71 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../application/auth_provider.dart';
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(30.0),
-        child: Column(
+    final auth = context.watch<AuthProvider>();
+
+    return WillPopScope(
+      onWillPop: () async => true,
+      child: Scaffold(
+        body: Padding(
+          padding: const EdgeInsets.all(30),
+          child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.document_scanner, size: 80, color: Colors.black),
-            const SizedBox(height: 40),
-            const Text(
-              "LOGIN",
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 40),
-            _buildTextField("Email"),
+            TextField(controller: _emailController, decoration: const InputDecoration(labelText: "Email")),
             const SizedBox(height: 20),
-            _buildTextField("Password", obscureText: true),
+            TextField(controller: _passwordController, obscureText: true, decoration: const InputDecoration(labelText: "Password")),
             const SizedBox(height: 40),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushReplacementNamed(context, '/home');
+            auth.isLoading
+                ? const CircularProgressIndicator()
+                : ElevatedButton(
+              onPressed: () async {
+                await auth.login(_emailController.text, _passwordController.text);
+                if (auth.isLoggedIn) {
+                  Navigator.pushReplacementNamed(context, '/home');
+                } else if (auth.error != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(auth.error!)),
+                  );
+                }
               },
-              child: const Padding(
-                padding: EdgeInsets.all(15.0),
-                child: Text("ENTER"),
-              ),
+              child: const Text("Login"),
             ),
             const SizedBox(height: 20),
-            TextButton(
-              onPressed: () {
-                Navigator.pushNamed(context, '/register');
-              },
-              child: const Text(
-                "No account? Register here",
-                style: TextStyle(color: Colors.black, decoration: TextDecoration.underline),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text("No Account?"),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/register');
+                  },
+                  child: const Text("Register"),
+                ),
+              ],
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildTextField(String hint, {bool obscureText = false}) {
-    return TextField(
-      obscureText: obscureText,
-      cursorColor: Colors.black,
-      decoration: InputDecoration(
-        labelText: hint,
-        labelStyle: const TextStyle(color: Colors.black),
-        enabledBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.black, width: 2),
-          borderRadius: BorderRadius.zero,
-        ),
-        focusedBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.black, width: 2),
-          borderRadius: BorderRadius.zero,
-        ),
       ),
     );
   }

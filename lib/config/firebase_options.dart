@@ -64,7 +64,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '881855520522',
     projectId: 'receiptscanner-bf686',
     storageBucket: 'receiptscanner-bf686.firebasestorage.app',
-    iosClientId: '881855520522-t6ic5si734l3pcnlf0k29292aa7jhf2h.apps.googleusercontent.com',
+    iosClientId: '881855520522-t6ic5si734l3pcnlf029292aa7jhf2h.apps.googleusercontent.com',
     iosBundleId: 'com.example.sc',
   );
 

@@ -1,23 +1,22 @@
-import '../model/user.dart';
+import '../model/staff.dart';
 import '../../service/firebase_firestore_service.dart';
 
-class UserRepository {
+class StaffRepository {
   final FirestoreService _firestoreService = FirestoreService();
-  static const String collectionName = 'user';
+  static const String collectionName = 'staff';
 
-
-  // Get User By ID
-  Future<User?> getUserById(String userId) async{
+  // Get Staff By ID
+  Future<Staff?> getStaffById(String staffId) async {
     try{
-      return await _firestoreService.getModel<User>(
+      return await _firestoreService.getModel<Staff>(
         collection: collectionName,
-        docId: userId,
+        docId: staffId,
         fromMap: (map) {
           final enrichedMap = {
-            'userId': userId,
+            'staffId': staffId,
             ...map,
           };
-          return User.fromJson(enrichedMap);
+          return Staff.fromJson(enrichedMap);
         },
       );
     } catch (e) {
