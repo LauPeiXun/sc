@@ -1,11 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cross_file/cross_file.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'dart:convert';
-import 'dart:io';
 import '../model/receipt.dart';
 import '../../service/firebase_firestore_service.dart';
+import 'dart:typed_data';
+import 'package:cross_file/cross_file.dart';
 
 class ReceiptRepository {
+
   final FirestoreService _firestoreService = FirestoreService();
   static const String collectionName = 'receipt';
 
@@ -27,64 +29,72 @@ class ReceiptRepository {
     }
   }
 
-Future<Receipt> uploadReceipt(String staffId, XFile file) async {
-  try {
-    print("📤 Starting upload for user: $staffId, file: ${file.name}");
-    
-    var bytes = await file.readAsBytes();
-    print("📊 Original file size: ${bytes.lengthInBytes} bytes (${(bytes.lengthInBytes / 1024 / 1024).toStringAsFixed(2)} MB)");
-    
-    // 如果文件太大，需要压缩
-    const int maxSafeSize = 750 * 1024; // 750KB limit
-    
-    if (bytes.lengthInBytes > maxSafeSize) {
-      print("⚠️ File is too large! Attempting to compress...");
-      
-      // 尝试压缩（如果是PDF可能无法压缩，但值得一试）
-      if (file.name.toLowerCase().endsWith('.pdf')) {
-        throw Exception('PDF file is too large (${(bytes.lengthInBytes / 1024 / 1024).toStringAsFixed(2)} MB). Maximum allowed: 750KB.\n\nTip: Try using fewer pages or lower resolution when scanning.');
+  Future<Receipt> uploadReceipt(String staffId, String staffName, List<XFile> files) async {
+    try {
+      print("📤 Processing ${files.length} images for user: $staffName");
+
+      List<String> base64List = [];
+      int totalSize = 0;
+
+      // 1. 循环处理每一张图
+      for (var file in files) {
+        final Uint8List? compressedBytes = await FlutterImageCompress.compressWithFile(
+          file.path,
+          minWidth: 800,  // 缩小一点，为了能放多张
+          minHeight: 800,
+          quality: 50,    // 质量调低一点
+          format: CompressFormat.jpeg,
+        );
+
+        if (compressedBytes == null) continue;
+
+        // 累加大小，防止爆库
+        totalSize += compressedBytes.lengthInBytes;
+
+        // 编码并加入列表
+        base64List.add(base64Encode(compressedBytes));
       }
-      
-      throw Exception('File is too large (${(bytes.lengthInBytes / 1024 / 1024).toStringAsFixed(2)} MB). Maximum allowed: 750KB.');
+
+      // 2. 检查总大小 (Firestore 限制 1MB = 1,048,576 bytes)
+      print("📊 Total Size: ${(totalSize / 1024).toStringAsFixed(2)} KB");
+      if (totalSize > 950000) { // 950KB 安全线
+        throw Exception("Total size too big for Firestore! Try fewer pages.");
+      }
+
+      if (base64List.isEmpty) throw Exception("No images processed successfully");
+
+      final uid = _firestoreService.generateDocId(collectionName);
+      final fileName = "Scan_${DateTime.now().millisecondsSinceEpoch} (${base64List.length} pgs).jpg";
+
+      await FirebaseFirestore.instance.collection('receipt').doc(uid).set({
+        'receiptId': uid,
+        'receiptName': fileName,
+        'receiptImg': base64List, // ✅ 存入整个数组
+        'staffId': staffId,
+        'staffName': staffName,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // Report Collection (轻量级)
+      await FirebaseFirestore.instance.collection('report').doc(uid).set({
+        'reportId': uid,
+        'receiptName': fileName,
+        'pageCount': base64List.length, // 记录一下有多少页
+        'staffId': staffId,
+        'staffName': staffName,
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': 'Pending'
+      });
+
+      return Receipt(
+        receiptId: uid,
+        receiptName: fileName,
+        receiptImg: base64List, // ✅
+        staffId: staffId,
+        staffName: staffName,
+        createdAt: DateTime.now(),
+      );
+    } catch (e) {
+      rethrow;
     }
-
-    final pdfBase64 = base64Encode(bytes);
-    print("✅ File encoded to Base64");
-
-    final uid = _firestoreService.generateDocId(collectionName);
-    print("🆔 Generated docId: $uid");
-
-    print("🚀 Writing to Firestore...");
-    await FirebaseFirestore.instance.collection('receipt').doc(uid).set({
-      'receiptId': uid,
-      'receiptName': file.name,
-      'pdfBase64': pdfBase64,
-      'staffId': staffId,
-      'staffName': 'Unknown',
-      'description': '',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    await FirebaseFirestore.instance.collection('report').doc(uid).set({
-      'reportId': uid,
-      'receiptName': file.name,
-      'creteBy': staffId,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    print("✨ Upload successful!");
-
-    return Receipt(
-      receiptId: uid,
-      receiptName: file.name,
-      pdfBase64: pdfBase64,
-      staffId: staffId,
-      staffName: 'Unknown',
-      description: '',
-      createdAt: DateTime.now(),
-    );
-  } catch (e) {
-    print("Upload Failed: $e");
-    rethrow;
-  }
-}}
+  }}

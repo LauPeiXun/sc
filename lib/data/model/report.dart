@@ -3,14 +3,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Report {
   final String reportId;
   final String receiptName;
-  final String pdfBase64;
+  final String receiptImg;
   final String createBy;
   final DateTime createdAt;
 
   Report ({
     required this.reportId,
     required this.receiptName,
-    required this.pdfBase64,
+    required this.receiptImg,
     required this.createBy,
     required this.createdAt
   });
@@ -19,7 +19,7 @@ class Report {
     return Report(
         reportId: json['reportId'] ?? '',
         receiptName: json['receiptName'] ?? '',
-        pdfBase64: json['pdfBase64'] ?? '',
+        receiptImg: json['receiptImg'] ?? '',
         createBy: json['createBy'] ?? '',
         createdAt: json['createdAt'] is Timestamp
             ? (json['createdAt'] as Timestamp).toDate()
@@ -31,7 +31,7 @@ class Report {
     return {
       'reportId': reportId,
       'receiptName': receiptName,
-      'pdfBase64': pdfBase64,
+      'receiptImg': receiptImg,
       'createBy': createBy,
       'createdAt': Timestamp.fromDate(createdAt)
     };

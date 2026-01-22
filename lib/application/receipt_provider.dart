@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cross_file/cross_file.dart';
 import '../data/repositories/receipt_repository.dart';
@@ -39,14 +40,21 @@ class ReceiptProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> scanAndUploadPdf(String staffId, XFile file) async {
+  Future<void> scanAndUploadImage(String staffId, String staffName, List<XFile> file) async {
     _setLoading(true);
     _setError(null);
     try {
-      final uploadedReceipt = await _receiptRepository.uploadReceipt(staffId, file);
-      _currentReceipt = uploadedReceipt;
+      final user = FirebaseAuth.instance.currentUser;
+      final String safeName = user?.displayName ?? "Unknown Staff";
+
+      // 调用 Repository
+      final uploadedReceipt = await _receiptRepository.uploadReceipt(
+          staffId,
+          safeName,
+          file
+      );
     } catch (e) {
-      _setError('Scan or upload failed: $e');
+      _setError('Failed to upload receipt: $e');
     } finally {
       _setLoading(false);
     }

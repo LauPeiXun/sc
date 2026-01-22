@@ -28,7 +28,7 @@ class AuthRepository {
         password: password,
       );
 
-      // Ensure we have a valid UID before proceeding
+      // Ensure we have a valid UID
       if (credential?.user == null) {
         throw Exception("Auth failed: No user returned");
       }
@@ -45,7 +45,6 @@ class AuthRepository {
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
-
       return credential?.user;
 
     } catch (e) {
