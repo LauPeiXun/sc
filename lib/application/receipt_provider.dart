@@ -40,18 +40,18 @@ class ReceiptProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> scanAndUploadImage(String staffId, String staffName, List<XFile> file) async {
+  Future<void> scanAndUploadImage(String staffId, String staffName, List<XFile> file, {String extractedText = ''}) async {
     _setLoading(true);
     _setError(null);
     try {
       final user = FirebaseAuth.instance.currentUser;
       final String safeName = user?.displayName ?? "Unknown Staff";
 
-      // 调用 Repository
       final uploadedReceipt = await _receiptRepository.uploadReceipt(
           staffId,
           safeName,
-          file
+          file,
+          extractedText: extractedText,
       );
     } catch (e) {
       _setError('Failed to upload receipt: $e');

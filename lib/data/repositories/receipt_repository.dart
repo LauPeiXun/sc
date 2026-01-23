@@ -29,7 +29,7 @@ class ReceiptRepository {
     }
   }
 
-  Future<Receipt> uploadReceipt(String staffId, String staffName, List<XFile> files) async {
+  Future<Receipt> uploadReceipt(String staffId, String staffName, List<XFile> files, {String extractedText = ''}) async {
     try {
       print("📤 Processing ${files.length} images for user: $staffName");
 
@@ -38,63 +38,120 @@ class ReceiptRepository {
 
       // 1. 循环处理每一张图
       for (var file in files) {
-        final Uint8List? compressedBytes = await FlutterImageCompress.compressWithFile(
-          file.path,
-          minWidth: 800,  // 缩小一点，为了能放多张
-          minHeight: 800,
-          quality: 50,    // 质量调低一点
-          format: CompressFormat.jpeg,
-        );
+        try {
+          print("🖼️ Reading image: ${file.name}");
+          
+          // 直接读取文件的二进制数据
+          final bytes = await file.readAsBytes();
+          
+          if (bytes.isEmpty) {
+            print("⚠️ File is empty: ${file.name}, skipping");
+            continue;
+          }
 
-        if (compressedBytes == null) continue;
+          print("✅ Read file ${file.name}: ${(bytes.length / 1024).toStringAsFixed(2)} KB");
 
-        // 累加大小，防止爆库
-        totalSize += compressedBytes.lengthInBytes;
+          // 尝试压缩
+          Uint8List? compressedBytes;
+          try {
+            compressedBytes = await FlutterImageCompress.compressWithList(
+              bytes,
+              minWidth: 800,
+              minHeight: 800,
+              quality: 50,
+              format: CompressFormat.jpeg,
+            );
+          } catch (e) {
+            print("⚠️ Compression failed for ${file.name}, using original: $e");
+            compressedBytes = bytes;
+          }
 
-        // 编码并加入列表
-        base64List.add(base64Encode(compressedBytes));
+          if (compressedBytes == null || compressedBytes.isEmpty) {
+            print("⚠️ Compression returned empty for ${file.name}, using original");
+            compressedBytes = bytes;
+          }
+
+          print("✅ Compressed ${file.name}: ${(compressedBytes.length / 1024).toStringAsFixed(2)} KB");
+
+          // 累加大小
+          totalSize += compressedBytes.length;
+
+          // 编码并加入列表
+          final encoded = base64Encode(compressedBytes);
+          if (encoded.isEmpty) {
+            print("⚠️ Base64 encoding failed for ${file.name}, skipping");
+            continue;
+          }
+          
+          print("✅ Base64 encoded ${file.name}");
+          base64List.add(encoded);
+        } catch (e) {
+          print("❌ Error processing ${file.name}: $e");
+          continue;
+        }
       }
 
-      // 2. 检查总大小 (Firestore 限制 1MB = 1,048,576 bytes)
-      print("📊 Total Size: ${(totalSize / 1024).toStringAsFixed(2)} KB");
-      if (totalSize > 950000) { // 950KB 安全线
-        throw Exception("Total size too big for Firestore! Try fewer pages.");
+      // 2. 检查总大小
+      if (base64List.isNotEmpty) {
+        print("📊 Total Size: ${(totalSize / 1024).toStringAsFixed(2)} KB");
+        if (totalSize > 950000) { // 950KB 安全线
+          throw Exception("Total size too big for Firestore! Try fewer pages.");
+        }
       }
 
-      if (base64List.isEmpty) throw Exception("No images processed successfully");
+      // 允许只保存文本而不需要图片
+      if (base64List.isEmpty && extractedText.isEmpty) {
+        throw Exception("No images or text to save");
+      }
 
       final uid = _firestoreService.generateDocId(collectionName);
-      final fileName = "Scan_${DateTime.now().millisecondsSinceEpoch} (${base64List.length} pgs).jpg";
+      final pageCount = base64List.length;
+      final fileName = pageCount > 0
+          ? "Scan_${DateTime.now().millisecondsSinceEpoch} (${pageCount} pgs).jpg"
+          : "OCR_${DateTime.now().millisecondsSinceEpoch}.txt";
+
+      print("💾 Saving to Firestore - ID: $uid, Images: ${base64List.length}, Text length: ${extractedText.length}");
 
       await FirebaseFirestore.instance.collection('receipt').doc(uid).set({
         'receiptId': uid,
         'receiptName': fileName,
-        'receiptImg': base64List, // ✅ 存入整个数组
+        'receiptImg': base64List.isEmpty ? [] : base64List,
         'staffId': staffId,
         'staffName': staffName,
         'createdAt': FieldValue.serverTimestamp(),
+        'extractedText': extractedText,
       });
 
-      // Report Collection (轻量级)
-      await FirebaseFirestore.instance.collection('report').doc(uid).set({
-        'reportId': uid,
-        'receiptName': fileName,
-        'pageCount': base64List.length, // 记录一下有多少页
-        'staffId': staffId,
-        'staffName': staffName,
-        'createdAt': FieldValue.serverTimestamp(),
-        'status': 'Pending'
-      });
+      print("✅ Successfully saved receipt: $uid");
+
+      // Report Collection (轻量级) - 添加错误处理
+      try {
+        await FirebaseFirestore.instance.collection('report').doc(uid).set({
+          'reportId': uid,
+          'receiptName': fileName,
+          'pageCount': pageCount,
+          'staffId': staffId,
+          'staffName': staffName,
+          'createdAt': FieldValue.serverTimestamp(),
+          'status': 'Pending'
+        });
+        print("✅ Successfully saved report: $uid");
+      } catch (e) {
+        print("⚠️ Failed to save report (non-critical): $e");
+        // 不中断主流程，receipt已保存成功
+      }
 
       return Receipt(
         receiptId: uid,
         receiptName: fileName,
-        receiptImg: base64List, // ✅
+        receiptImg: base64List,
         staffId: staffId,
         staffName: staffName,
         createdAt: DateTime.now(),
+        extractedText: extractedText
       );
     } catch (e) {
+      print("❌ Error in uploadReceipt: $e");
       rethrow;
     }
   }}

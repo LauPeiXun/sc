@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sc/application/ocr_provider.dart';
 import 'package:sc/presentation/screens/home_page.dart';
 import 'package:sc/presentation/screens/login_page.dart';
 import 'package:sc/presentation/screens/register_page.dart';
@@ -35,6 +36,9 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<ReceiptProvider>(
           create: (_) => ReceiptProvider(),
+        ),
+        ChangeNotifierProvider<OCRProvider>(
+          create: (_) => OCRProvider(),
         ),
         ChangeNotifierProvider(create: (_) => StaffProvider()),
       ],

@@ -7,6 +7,7 @@ class Receipt {
   final String staffId;
   final String staffName;
   final DateTime createdAt;
+  final String extractedText;
 
   Receipt({
     required this.receiptId,
@@ -15,6 +16,7 @@ class Receipt {
     required this.staffId,
     required this.staffName,
     required this.createdAt,
+    required this.extractedText
   });
 
   factory Receipt.fromJson(Map<String, dynamic> json){
@@ -26,7 +28,8 @@ class Receipt {
         staffName: json['staffName'] ?? '',
         createdAt: json['createdAt'] is Timestamp
             ? (json['createdAt'] as Timestamp).toDate()
-            : (json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now())
+            : (json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now()),
+        extractedText: json['extractedText'] ?? ''
     );
   }
 
@@ -37,7 +40,8 @@ class Receipt {
       'receiptImg': receiptImg,
       'staffId': staffId,
       'staffName': staffName,
-      'createdAt': Timestamp.fromDate(createdAt)
+      'createdAt': Timestamp.fromDate(createdAt),
+      'extractedText': extractedText,
     };
   }
 }
