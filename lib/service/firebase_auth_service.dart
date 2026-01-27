@@ -54,6 +54,27 @@ class AuthService {
     }
   }
 
+  Future<void> updatePassword(String newPassword) async {
+    try {
+      await _auth.currentUser?.updatePassword(newPassword);
+    } on FirebaseAuthException catch (e) {
+      throw _handleAuthException(e);
+    } catch (e) {
+      throw 'Failed to update password: $e';
+    }
+  }
+
+  Future<void> reauthenticate(String email, String password) async {
+    try {
+      final credential = EmailAuthProvider.credential(email: email, password: password);
+      await _auth.currentUser?.reauthenticateWithCredential(credential);
+    } on FirebaseAuthException catch (e) {
+      throw _handleAuthException(e);
+    } catch (e) {
+      throw 'Failed to reauthenticate: $e';
+    }
+  }
+
   String _handleAuthException(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':

@@ -2,10 +2,10 @@ import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:sc/application/ocr_provider.dart';
 import 'package:sc/presentation/screens/home_page.dart';
 import 'package:sc/presentation/screens/login_page.dart';
 import 'package:sc/presentation/screens/register_page.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'application/auth_provider.dart';
 import 'application/receipt_provider.dart';
@@ -15,6 +15,12 @@ import 'application/staff_provider.dart';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await dotenv.load(fileName: ".env");
+    print("✅ DotEnv loaded successfully");
+  } catch (e) {
+    print("❌ Error loading .env file: $e");
+  }
   await Firebase.initializeApp();
   await FirebaseAuth.instance.authStateChanges().first;
   
@@ -37,24 +43,20 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider<ReceiptProvider>(
           create: (_) => ReceiptProvider(),
         ),
-        ChangeNotifierProvider<OCRProvider>(
-          create: (_) => OCRProvider(),
+        ChangeNotifierProvider<StaffProvider>(
+          create: (_) => StaffProvider(),
         ),
-        ChangeNotifierProvider(create: (_) => StaffProvider()),
       ],
       child: MaterialApp(
         title: 'Receipt Scanner',
         home: StreamBuilder<User?>(
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
-            // Case A: Waiting for connection
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );
             }
-
-            // Case B: Connection error
             if (snapshot.hasError) {
               return Scaffold(
                 body: Center(
@@ -62,14 +64,10 @@ class MyApp extends StatelessWidget {
                 ),
               );
             }
-
-            // Case C: We have a user! (They logged in previously)
             if (snapshot.hasData && snapshot.data != null) {
-              return MainScreen();
+              return const HomePage();
             }
-
-            // Case D: No user found. (They need to login)
-            return LoginPage();
+            return const LoginPage();
           },
         ),
         debugShowCheckedModeBanner: false,
@@ -96,7 +94,7 @@ class MyApp extends StatelessWidget {
         routes: {
           '/login': (context) => const LoginPage(),
           '/register': (context) => const RegisterPage(),
-          '/home': (context) => MainScreen(),
+          '/home': (context) => const HomePage(),
         },
       ),
     );

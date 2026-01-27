@@ -13,22 +13,32 @@ class _RegisterPageState extends State<RegisterPage> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
   Future<void> _handleRegister() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please fill in all fields")),
+      );
+      return;
+    }
+
+    if (password != confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Passwords do not match")),
       );
       return;
     }
@@ -59,15 +69,16 @@ class _RegisterPageState extends State<RegisterPage> {
     final auth = context.watch<AuthProvider>();
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(30.0),
+      body: Center(
         child: SingleChildScrollView(
+          padding: const EdgeInsets.all(30.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -82,6 +93,8 @@ class _RegisterPageState extends State<RegisterPage> {
               _buildTextField("Email", _emailController),
               const SizedBox(height: 20),
               _buildTextField("Password", _passwordController, obscureText: true),
+              const SizedBox(height: 20),
+              _buildTextField("Confirm Password", _confirmPasswordController, obscureText: true),
 
               const SizedBox(height: 40),
 
@@ -91,7 +104,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 onPressed: _handleRegister,
                 child: const Padding(
                   padding: EdgeInsets.all(15.0),
-                  child: Text("CREATE ACCOUNT"),
+                  child: Text("Register"),
                 ),
               ),
             ],
@@ -110,12 +123,12 @@ class _RegisterPageState extends State<RegisterPage> {
         labelText: hint,
         labelStyle: const TextStyle(color: Colors.black),
         enabledBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.black, width: 2),
-          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: Colors.black, width: 0.6),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
         focusedBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.black, width: 2),
-          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: Colors.black, width: 0.6),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
       ),
     );

@@ -52,5 +52,4 @@ class StaffProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-
 }

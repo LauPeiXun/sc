@@ -3,7 +3,6 @@ import 'package:flutter_doc_scanner/flutter_doc_scanner.dart';
 import 'dart:io';
 
 class DocumentScannerService {
-  /// Scans document and returns list of image paths
   Future<List<String>> scanDocument() async {
     dynamic result;
 
@@ -14,10 +13,9 @@ class DocumentScannerService {
     }
 
     if (result == null) {
-      throw Exception('User cancelled scanning');
+      return [];
     }
 
-    // Parse image paths
     List<String> imagePaths = [];
 
     if (result is List && result.isNotEmpty) {
@@ -35,10 +33,9 @@ class DocumentScannerService {
     }
 
     if (imagePaths.isEmpty) {
-      throw Exception('No images captured');
+      return [];
     }
 
-    // Clean paths and validate
     List<String> validPaths = [];
     for (var path in imagePaths) {
       String cleanPath = path;
@@ -46,14 +43,13 @@ class DocumentScannerService {
         cleanPath = cleanPath.replaceFirst('file://', '');
       }
       
-      // Validate file exists
       final file = File(cleanPath);
       if (await file.exists()) {
         final fileSize = await file.length();
-        print("✅ Image found: $cleanPath (${(fileSize / 1024).toStringAsFixed(2)} KB)");
+        print("Image found: $cleanPath (${(fileSize / 1024).toStringAsFixed(2)} KB)");
         validPaths.add(cleanPath);
       } else {
-        print("❌ Image not found: $cleanPath");
+        print("Image not found: $cleanPath");
       }
     }
 

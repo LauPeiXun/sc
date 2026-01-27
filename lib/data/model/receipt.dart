@@ -7,7 +7,11 @@ class Receipt {
   final String staffId;
   final String staffName;
   final DateTime createdAt;
-  final String extractedText;
+  final String bank;
+  final String bankAcc;
+  final double totalAmount;
+  final String transferDate;
+  final String status;
 
   Receipt({
     required this.receiptId,
@@ -16,7 +20,12 @@ class Receipt {
     required this.staffId,
     required this.staffName,
     required this.createdAt,
-    required this.extractedText
+    required this.bank,
+    required this.bankAcc,
+    required this.totalAmount,
+    required this.transferDate,
+    required this.status,
+
   });
 
   factory Receipt.fromJson(Map<String, dynamic> json){
@@ -29,7 +38,13 @@ class Receipt {
         createdAt: json['createdAt'] is Timestamp
             ? (json['createdAt'] as Timestamp).toDate()
             : (json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now()),
-        extractedText: json['extractedText'] ?? ''
+        bank: json['bank'] ?? '',
+        bankAcc: json['bankAcc'] ?? '',
+        totalAmount: (json['totalAmount'] is num)
+            ? (json['totalAmount'] as num).toDouble()
+            : double.tryParse(json['totalAmount']?.toString() ?? '0') ?? 0.0,
+        transferDate: json['transferDate'] ?? '',
+        status: json['status'] ?? '',
     );
   }
 
@@ -41,7 +56,11 @@ class Receipt {
       'staffId': staffId,
       'staffName': staffName,
       'createdAt': Timestamp.fromDate(createdAt),
-      'extractedText': extractedText,
+      'bank': bank,
+      'bankAcc': bankAcc,
+      'totalAmount': totalAmount,
+      'transferDate': transferDate,
+      'status': status
     };
   }
 }

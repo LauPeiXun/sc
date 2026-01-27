@@ -1,14 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:sc/service/gemini_ai_service.dart';
 import 'dart:convert';
 import '../model/receipt.dart';
 import '../../service/firebase_firestore_service.dart';
 import 'dart:typed_data';
-import 'package:cross_file/cross_file.dart';
 
 class ReceiptRepository {
 
   final FirestoreService _firestoreService = FirestoreService();
+  final GeminiAiService _geminiAiService = GeminiAiService();
   static const String collectionName = 'receipt';
 
   Future<Receipt?> getReceiptById(String receiptId) async {
@@ -29,129 +30,95 @@ class ReceiptRepository {
     }
   }
 
-  Future<Receipt> uploadReceipt(String staffId, String staffName, List<XFile> files, {String extractedText = ''}) async {
+  Future<Map<String, dynamic>> recognizeReceipt(List<Uint8List> imageBytes) async {
     try {
-      print("📤 Processing ${files.length} images for user: $staffName");
+      final String? jsonString = await _geminiAiService.processImages(imageBytes);
+      if (jsonString == null) throw Exception("AI no response");
 
+      final Map<String, dynamic> responseMap = jsonDecode(jsonString);
+      final Map<String, dynamic> data = responseMap['data'] ?? {};
+
+      if (responseMap['status'] == 'unclear') {
+        throw Exception("Blurred image: ${responseMap['reason']}");
+      }
+      if (responseMap['status'] == 'multiple_detected') {
+        throw Exception("Detected multiple receipts: ${responseMap['reason']}");
+      }
+      return data;
+    } catch (e) {
+      print("❌ OCR Error: $e");
+      rethrow;
+    }
+  }
+
+  Future<Receipt> uploadReceipt({
+    required String staffId,
+    required String staffName,
+    required List<XFile> files,
+    required Map<String, dynamic> ocrData,
+  }) async {
+    try {
       List<String> base64List = [];
       int totalSize = 0;
 
-      // 1. 循环处理每一张图
       for (var file in files) {
-        try {
-          print("🖼️ Reading image: ${file.name}");
-          
-          // 直接读取文件的二进制数据
-          final bytes = await file.readAsBytes();
-          
-          if (bytes.isEmpty) {
-            print("⚠️ File is empty: ${file.name}, skipping");
-            continue;
-          }
+        final bytes = await file.readAsBytes();
 
-          print("✅ Read file ${file.name}: ${(bytes.length / 1024).toStringAsFixed(2)} KB");
+        final compressedBytes = await FlutterImageCompress.compressWithList(
+          bytes,
+          minWidth: 800,
+          quality: 50,
+          format: CompressFormat.jpeg,
+        ) ?? bytes;
 
-          // 尝试压缩
-          Uint8List? compressedBytes;
-          try {
-            compressedBytes = await FlutterImageCompress.compressWithList(
-              bytes,
-              minWidth: 800,
-              minHeight: 800,
-              quality: 50,
-              format: CompressFormat.jpeg,
-            );
-          } catch (e) {
-            print("⚠️ Compression failed for ${file.name}, using original: $e");
-            compressedBytes = bytes;
-          }
-
-          if (compressedBytes == null || compressedBytes.isEmpty) {
-            print("⚠️ Compression returned empty for ${file.name}, using original");
-            compressedBytes = bytes;
-          }
-
-          print("✅ Compressed ${file.name}: ${(compressedBytes.length / 1024).toStringAsFixed(2)} KB");
-
-          // 累加大小
-          totalSize += compressedBytes.length;
-
-          // 编码并加入列表
-          final encoded = base64Encode(compressedBytes);
-          if (encoded.isEmpty) {
-            print("⚠️ Base64 encoding failed for ${file.name}, skipping");
-            continue;
-          }
-          
-          print("✅ Base64 encoded ${file.name}");
-          base64List.add(encoded);
-        } catch (e) {
-          print("❌ Error processing ${file.name}: $e");
-          continue;
-        }
+        totalSize += compressedBytes.length;
+        base64List.add(base64Encode(compressedBytes));
       }
 
-      // 2. 检查总大小
-      if (base64List.isNotEmpty) {
-        print("📊 Total Size: ${(totalSize / 1024).toStringAsFixed(2)} KB");
-        if (totalSize > 950000) { // 950KB 安全线
-          throw Exception("Total size too big for Firestore! Try fewer pages.");
-        }
-      }
-
-      // 允许只保存文本而不需要图片
-      if (base64List.isEmpty && extractedText.isEmpty) {
-        throw Exception("No images or text to save");
+      if (totalSize > 950000) {
+        throw Exception("图片太大，Firestore 塞不下了！请减少页数或降低质量。");
       }
 
       final uid = _firestoreService.generateDocId(collectionName);
-      final pageCount = base64List.length;
-      final fileName = pageCount > 0
-          ? "Scan_${DateTime.now().millisecondsSinceEpoch} (${pageCount} pgs).jpg"
-          : "OCR_${DateTime.now().millisecondsSinceEpoch}.txt";
 
-      print("💾 Saving to Firestore - ID: $uid, Images: ${base64List.length}, Text length: ${extractedText.length}");
-
-      await FirebaseFirestore.instance.collection('receipt').doc(uid).set({
+      // 3. 构造存入 Firestore 的 Map (字段必须和你的 toJson/fromJson 一一对应)
+      final Map<String, dynamic> receiptData = {
         'receiptId': uid,
-        'receiptName': fileName,
-        'receiptImg': base64List.isEmpty ? [] : base64List,
+        'receiptName': files.isNotEmpty ? files.first.name : "Unknown_Scan",
+        'receiptImg': base64List,
         'staffId': staffId,
         'staffName': staffName,
         'createdAt': FieldValue.serverTimestamp(),
-        'extractedText': extractedText,
+        'bank': ocrData['bankName'] ?? '',
+        'bankAcc': ocrData['bankAcc'] ?? '',
+        'totalAmount': (ocrData['totalAmount'] ?? 0.0).toDouble(),
+        'transferDate': ocrData['transferDate'] ?? '',
+        'status': ocrData['status'] ?? 'unknown',
+      };
+
+      await FirebaseFirestore.instance.collection(collectionName).doc(uid).set(receiptData);
+
+      return Receipt.fromJson({
+        ...receiptData,
+        'createdAt': DateTime.now(),
       });
-
-      print("✅ Successfully saved receipt: $uid");
-
-      // Report Collection (轻量级) - 添加错误处理
-      try {
-        await FirebaseFirestore.instance.collection('report').doc(uid).set({
-          'reportId': uid,
-          'receiptName': fileName,
-          'pageCount': pageCount,
-          'staffId': staffId,
-          'staffName': staffName,
-          'createdAt': FieldValue.serverTimestamp(),
-          'status': 'Pending'
-        });
-        print("✅ Successfully saved report: $uid");
-      } catch (e) {
-        print("⚠️ Failed to save report (non-critical): $e");
-        // 不中断主流程，receipt已保存成功
-      }
-
-      return Receipt(
-        receiptId: uid,
-        receiptName: fileName,
-        receiptImg: base64List,
-        staffId: staffId,
-        staffName: staffName,
-        createdAt: DateTime.now(),
-        extractedText: extractedText
-      );
     } catch (e) {
-      print("❌ Error in uploadReceipt: $e");
+      print("❌ uploadReceipt Error: $e");
       rethrow;
     }
-  }}
+  }
+  Future<void> deleteReceipt(String receiptId) async {
+    try {
+      // Delete from both collections
+      final batch = FirebaseFirestore.instance.batch();
+      batch.delete(FirebaseFirestore.instance.collection('receipt').doc(receiptId));
+      batch.delete(FirebaseFirestore.instance.collection('report').doc(receiptId));
+      await batch.commit();
+      print("✅ Successfully deleted receipt: $receiptId");
+    } catch (e) {
+      print("❌ Error deleting receipt: $e");
+      rethrow;
+    }
+  }
+
+}

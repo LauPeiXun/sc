@@ -20,6 +20,16 @@ class AuthRepository {
     await _authService.signOut();
   }
 
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    final email = _authService.currentUser?.email;
+    if (email != null) {
+      await _authService.reauthenticate(email, currentPassword);
+      await _authService.updatePassword(newPassword);
+    } else {
+      throw Exception("User email not found");
+    }
+  }
+
   Future <User?> register(String email, String password) async {
 
     try {
@@ -41,7 +51,6 @@ class AuthRepository {
           'email': email,
           'staffId': uid,
           'staffName': '',
-          'profilePicUrl': '',
           'createdAt': FieldValue.serverTimestamp(),
         });
       }

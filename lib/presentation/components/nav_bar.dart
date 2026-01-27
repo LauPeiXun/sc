@@ -12,15 +12,19 @@ class NavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    bool isNoneSelected = currentIndex < 0 || currentIndex > 2;
+    
     return Container(
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Colors.black, width: 2)),
       ),
+
       child: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: Colors.black,
+        selectedItemColor: isNoneSelected ? Colors.grey : Colors.black,
         unselectedItemColor: Colors.grey,
-        currentIndex: currentIndex,
+        currentIndex: isNoneSelected ? 0 : currentIndex,
         showSelectedLabels: true,
         showUnselectedLabels: true,
         elevation: 0,
@@ -32,8 +36,8 @@ class NavBar extends StatelessWidget {
             label: 'Report',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.camera_alt_outlined, size: 36),
-            activeIcon: Icon(Icons.camera_alt, size: 36),
+            icon: Icon(Icons.camera_alt_outlined, size: 25),
+            activeIcon: Icon(Icons.camera_alt, size: 25),
             label: 'Scan',
           ),
           BottomNavigationBarItem(

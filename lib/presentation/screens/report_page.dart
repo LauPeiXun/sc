@@ -1,11 +1,15 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../components/image_viewer.dart';
+import 'dart:convert';
+import '../../application/receipt_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:sc/data/model/receipt.dart';
+import 'receipt_detail_page.dart';
 
 class ReportPage extends StatefulWidget {
-  const ReportPage({super.key});
+  final bool showBackButton;
+  const ReportPage({super.key, this.showBackButton = false});
 
   @override
   State<ReportPage> createState() => _ReportPageState();
@@ -13,170 +17,376 @@ class ReportPage extends StatefulWidget {
 
 class _ReportPageState extends State<ReportPage> {
   late String staffId;
+  late TextEditingController _searchController;
+  late Stream<QuerySnapshot> _receiptStream;
+  String _sortBy = 'date'; //date, amount, name
 
   @override
   void initState() {
     super.initState();
     staffId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    _searchController = TextEditingController();
+    
+    _receiptStream = FirebaseFirestore.instance
+        .collection('receipt')
+        .where('staffId', isEqualTo: staffId)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  double _parseAmount(dynamic value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) {
+      String clean = value.replaceAll(RegExp(r'[^\d.]'), '');
+      return double.tryParse(clean) ?? 0.0;
+    }
+    return 0.0;
+  }
+
+  void _confirmDelete(String receiptId, String receiptName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Receipt"),
+        content: Text("Are you sure you want to delete '$receiptName'? This action cannot be undone."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await context.read<ReceiptProvider>().deleteReceipt(receiptId);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Receipt deleted successfully")),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Dashboard")),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 实时监听流来获取总数
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('receipt')
-                  .where('staffId', isEqualTo: staffId)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                // 计算当前数量 (如果没有数据就是 0)
-                String totalScanned = snapshot.hasData ? snapshot.data!.docs.length.toString() : "-";
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text("Report"),
+        leading: widget.showBackButton 
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.maybePop(context),
+              )
+            : null,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _receiptStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-                return Container(
-                  height: 200,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black, width: 3),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        "Overview",
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          // ✅ 这里的数量现在是动态的了
-                          _buildStatItem(totalScanned, "Scanned"),
-                          _buildStatItem("5", "Pending"), // Pending 逻辑如果没做先写死
-                          _buildStatItem("98%", "Accuracy"),
-                        ],
-                      )
-                    ],
-                  ),
-                );
-              },
-            ),
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
 
-            const SizedBox(height: 30),
-            const Text(
-              "HISTORY / REPORTS",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
+          final docs = snapshot.data?.docs ?? [];
 
-            // 下半部分：列表
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('receipt')
-                    .where('staffId', isEqualTo: staffId)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+          double totalSpent = 0.0;
+          double thisMonthSpent = 0.0;
+          int receiptCount = docs.length;
 
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}'));
-                  }
+          final now = DateTime.now();
 
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(
-                      child: Text('No receipts found'),
-                    );
-                  }
+          for (var doc in docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            double totalAmount = _parseAmount(data['totalAmount']);
 
-                  final receipts = snapshot.data!.docs;
+            Timestamp? t = data['createdAt'] as Timestamp?;
+            DateTime date = t?.toDate() ?? DateTime.now();
 
-                  // ✅ 修复 1：安全的排序 (防止 null 崩溃)
-                  receipts.sort((a, b) {
-                    final dataA = a.data() as Map<String, dynamic>;
-                    final dataB = b.data() as Map<String, dynamic>;
+            totalSpent += totalAmount;
 
-                    final tA = dataA['createdAt'] as Timestamp?;
-                    final tB = dataB['createdAt'] as Timestamp?;
+            if (date.year == now.year && date.month == now.month) {
+              thisMonthSpent += totalAmount;
+            }
+          }
 
-                    final dateA = tA?.toDate() ?? DateTime.now();
-                    final dateB = tB?.toDate() ?? DateTime.now();
-
-                    return dateB.compareTo(dateA);
-                  });
-
-                  return ListView.separated(
-                    itemCount: receipts.length,
-                    separatorBuilder: (context, index) => const Divider(color: Colors.black),
-                    itemBuilder: (context, index) {
-                      final receiptDoc = receipts[index];
-                      // 获取数据 Map 以便安全访问
-                      final data = receiptDoc.data() as Map<String, dynamic>;
-
-                      final receiptName = data['receiptName'] ?? 'Unknown.pdf';
-                      final Timestamp? timestamp = data['createdAt'] as Timestamp?;
-                      final DateTime createdAt = timestamp?.toDate() ?? DateTime.now();
-                      final formattedDate = '${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')} • ${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
-
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Container(
-                          width: 50,
-                          height: 50,
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _buildStatCard("Receipts", "$receiptCount", Icons.receipt_long, Colors.blue)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildStatCard("Avg. Receipt", "RM ${(totalSpent / (receiptCount == 0 ? 1 : receiptCount)).toStringAsFixed(0)}", Icons.analytics, Colors.orange)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const Text("Recent Transactions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+                
+                // Search and Sort Row
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(
                           color: Colors.black,
-                          child: const Icon(Icons.description, color: Colors.white),
+                          fontSize: 16,
                         ),
-                        title: Text(receiptName),
-                        subtitle: Text(formattedDate),
-                        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black),
-                        onTap: () {
-                          List<dynamic> imagesToShow = [];
-
-                          if (data.containsKey('receiptImg') && data['receiptImg'] != null) {
-                            imagesToShow = List.from(data['receiptImg']);
-                          }
-
-                          if (imagesToShow.isEmpty && data.containsKey('receiptImg')) {
-                            imagesToShow.add(data['receiptImg']);
-                          }
-
-                          // ✅ 修复 3：调用新的 ImageViewer
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ImageViewer(
-                                images: imagesToShow, // 传 List
-                                fileName: receiptName,
-                              ),
-                            ),
-                          );
+                        decoration: InputDecoration(
+                          hintText: 'Search by name...',
+                          hintStyle: TextStyle(color: Colors.grey[500]),
+                          prefixIcon: const Icon(Icons.search),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Colors.blue, width: 2),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        onChanged: (value) {
+                          setState(() {});
                         },
-                      );
-                    },
-                  );
-                },
-              ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        setState(() {
+                          _sortBy = value;
+                        });
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(value: 'date', child: Text('Sort by Date')),
+                        const PopupMenuItem(value: 'amount', child: Text('Sort by Amount')),
+                        const PopupMenuItem(value: 'name', child: Text('Sort by Name')),
+                      ],
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.sort),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                _buildRecentList(docs),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildStatItem(String value, String label) {
-    return Column(
-      children: [
-        Text(value, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
-        Text(label, style: const TextStyle(fontSize: 14)),
-      ],
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 5)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(height: 12),
+          Text(title, style: const TextStyle(color: Colors.grey)),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentList(List<QueryDocumentSnapshot> docs) {
+    // Filter by search query focusing on receiptName
+    var filteredDocs = docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final searchText = _searchController.text.toLowerCase();
+
+      final receiptName = (data['receiptName'] ?? 'Receipt')
+          .toString()
+          .toLowerCase();
+
+      return receiptName.contains(searchText);
+    }).toList();
+
+    // Sort the filtered documents
+    filteredDocs.sort((a, b) {
+      final dataA = a.data() as Map<String, dynamic>;
+      final dataB = b.data() as Map<String, dynamic>;
+
+      switch (_sortBy) {
+        case 'amount':
+          final amountA = _parseAmount(dataA['totalAmount']);
+          final amountB = _parseAmount(dataB['totalAmount']);
+          return amountB.compareTo(amountA); // Descending
+        case 'name':
+          final nameA = (dataA['receiptName'] ?? 'Receipt').toString();
+          final nameB = (dataB['receiptName'] ?? 'Receipt').toString();
+          return nameA.compareTo(nameB); // Ascending
+        case 'date':
+        default:
+          final dateA = (dataA['createdAt'] as Timestamp?)?.toDate() ??
+              DateTime.now();
+          final dateB = (dataB['createdAt'] as Timestamp?)?.toDate() ??
+              DateTime.now();
+          return dateB.compareTo(dateA); // Descending
+      }
+    });
+
+    if (filteredDocs.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            _searchController.text.isNotEmpty
+                ? 'No receipts found'
+                : 'No recent transactions',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: filteredDocs.length,
+        separatorBuilder: (context, index) => Divider(color: Colors.grey[200]),
+        itemBuilder: (context, index) {
+          final data = filteredDocs[index].data() as Map<String, dynamic>;
+
+          // Data Extraction
+          final receiptName = data['receiptName'] ?? 'Receipt';
+          final totalAmount = _parseAmount(data['totalAmount']);
+          final receiptImg = data['receiptImg'] as List<dynamic>? ?? [];
+          final status = data['status'] ?? 'Unclear';
+
+          final Timestamp? timestamp = data['createdAt'] as Timestamp?;
+          final DateTime createdAt = timestamp?.toDate() ?? DateTime.now();
+          final dateStr = "${createdAt.day}/${createdAt.month}/${createdAt
+              .year}";
+
+          return ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                  image: receiptImg.isNotEmpty
+                      ? DecorationImage(
+                      image: MemoryImage(base64Decode(receiptImg[0])),
+                      fit: BoxFit.cover)
+                      : null
+              ),
+              child: receiptImg.isEmpty ? const Icon(Icons.receipt) : null,
+            ),
+            title: Row(
+              children: [
+                Expanded(child: Text(receiptName,
+                    style: const TextStyle(fontWeight: FontWeight.bold))),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: status.toLowerCase() == 'clear'
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    status.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: status.toLowerCase() == 'clear'
+                          ? Colors.green
+                          : Colors.red,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            subtitle: Text("Scan at: ${dateStr}"),
+            trailing: Text(
+                "RM ${totalAmount.toStringAsFixed(2)}",
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 16)
+            ),
+            onTap: () {
+              // Build Receipt object from Firestore data
+              final receipt = Receipt(
+                receiptId: filteredDocs[index].id,
+                receiptName: receiptName,
+                receiptImg: receiptImg.cast<String>().toList(),
+                staffId: data['staffId'] ?? '',
+                staffName: data['staffName'] ?? '',
+                createdAt: createdAt,
+                bank: data['bank'] ?? '',
+                bankAcc: data['bankAcc'] ?? '',
+                totalAmount: totalAmount ?? 0.0,
+                transferDate: data['transferDate'] ?? '',
+                status: status,
+              );
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ReceiptDetailPage(receipt: receipt),
+                ),
+              );
+            },
+            onLongPress: () =>
+                _confirmDelete(filteredDocs[index].id, receiptName),
+          );
+        }
     );
   }
 }
