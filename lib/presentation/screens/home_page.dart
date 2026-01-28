@@ -71,21 +71,49 @@ class _HomePageState extends State<HomePage> {
               children: [
                 _buildSummary(docs),
                 const SizedBox(height: 24),
-                const Text("Scans Analysis", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                _buildBarChart(docs),
+                Container(
+                  padding: const EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.grey,
+                      width: 0.5,
+                    )
+                  ),
+                  child: Column(
+                    children: [
+                      const Text("Scans Analysis", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 16),
+                      _buildBarChart(docs),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 32),
-                const Text("Receipts Status", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                _buildStatusPieChart(docs),
-                const SizedBox(height: 32),
+                Container(
+                  padding: const EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.grey,
+                        width: 0.5,
+                      )
+                  ),
+                  child: Column(
+                    children: [
+                      const Text("Receipts Status", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 16),
+                      _buildStatusPieChart(docs),
+
+                    ],
+                  ),
+                )
               ],
             ),
           );
         },
       ),
       bottomNavigationBar: NavBar(
-        currentIndex: -1, //Use -1 or similar to indicate none selected
+        currentIndex: -1,
         onTap: (index) {
           Navigator.push(
             context,
@@ -99,12 +127,38 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildSummary(List<QueryDocumentSnapshot> docs) {
-    return Row(
+    final filteredDocs = _filterDocs(docs);
+    int clearCount = 0;
+    int unclearCount = 0;
+    for (var doc in filteredDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      String status = (data['status'] ?? '').toString().toLowerCase();
+
+      if (status == 'clear') {
+        clearCount++;
+      } else {
+        unclearCount++;
+      }
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: _buildInfoCard("Total Scans", "${docs.length}", Icons.document_scanner, Colors.blue)),
-        const SizedBox(width: 16),
-        Expanded(child: _buildInfoCard("This $_mode", "${_filterDocs(docs).length}", Icons.analytics, Colors.green)),
+        Row (
+          children: [
+            Expanded(child: _buildInfoCard("Total Scans", "${docs.length}", Icons.document_scanner, Colors.blue)),
+            const SizedBox(width: 16),
+            Expanded(child: _buildInfoCard("This $_mode", "${_filterDocs(docs).length}", Icons.analytics, Colors.black)),
+          ],
+        ),
+        Row (
+          children: [
+            Expanded(child: _buildInfoCard(" Clear", "${clearCount}", Icons.done_outline_outlined, Colors.green)),
+            const SizedBox(width: 16),
+            Expanded(child: _buildInfoCard("Unclear", "${unclearCount}", Icons.error_outline, Colors.red)),
+          ],
+        )
       ],
+
     );
   }
 
@@ -167,6 +221,7 @@ class _HomePageState extends State<HomePage> {
 
     return SizedBox(
       height: 200,
+
       child: BarChart(
         BarChartData(
           barGroups: groups,

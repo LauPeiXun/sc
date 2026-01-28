@@ -1,6 +1,8 @@
 import 'dart:typed_data';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../data/repositories/receipt_repository.dart';
 import '../data/model/receipt.dart';
 
@@ -40,7 +42,7 @@ class ReceiptProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> processScanAndUpload({
+  Future<Receipt> processScanOnly({
     required String staffId,
     required String staffName,
     required List<XFile> files,
@@ -55,21 +57,76 @@ class ReceiptProvider extends ChangeNotifier {
 
       final ocrData = await _receiptRepository.recognizeReceipt(imageBytes);
 
-      final uploadedReceipt = await _receiptRepository.uploadReceipt(
+      // Create base64 images for display
+      List<String> base64List = [];
+      for (var file in files) {
+        final bytes = await file.readAsBytes();
+        final compressedBytes = await FlutterImageCompress.compressWithList(
+          bytes,
+          minWidth: 800,
+          quality: 50,
+          format: CompressFormat.jpeg,
+        );
+        base64List.add(base64Encode(compressedBytes));
+      }
+
+      final receipt = Receipt(
+        receiptId: '',
+        receiptName: ocrData['receiptName'] ?? '',
+        receiptImg: base64List,
         staffId: staffId,
         staffName: staffName,
-        files: files,
-        ocrData: ocrData,
+        createdAt: DateTime.now(),
+        bank: ocrData['bank'] ?? '',
+        bankAcc: ocrData['bankAcc'] ?? '',
+        totalAmount: (ocrData['totalAmount'] is num) ? (ocrData['totalAmount'] as num).toDouble() : 0.0,
+        transferDate: ocrData['transferDate'] ?? '',
+        status: ocrData['status'] ?? 'Unclear',
       );
 
-      _currentReceipt = uploadedReceipt;
+      _currentReceipt = receipt;
       notifyListeners();
+      return receipt;
     } catch (e) {
       _setError(e.toString());
+      rethrow;
     } finally {
       _setLoading(false);
     }
   }
+
+  Future<void> uploadCurrentReceipt({
+    required List<XFile> files,
+  }) async {
+    if (_currentReceipt == null) {
+      throw Exception('No receipt to upload.');
+    }
+
+    _setLoading(true);
+    _setError(null);
+    try {
+      final uploaded = await _receiptRepository.uploadReceipt(
+        staffId: _currentReceipt!.staffId,
+        staffName: _currentReceipt!.staffName,
+        files: files,
+        ocrData: {
+          'bankName': _currentReceipt!.bank,
+          'bankAcc': _currentReceipt!.bankAcc,
+          'totalAmount': _currentReceipt!.totalAmount,
+          'transferDate': _currentReceipt!.transferDate.toString(),
+          'status': _currentReceipt!.status,
+        },
+      );
+      _currentReceipt = uploaded;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   Future<void> deleteReceipt(String receiptId) async {
     _setLoading(true);
     _setError(null);

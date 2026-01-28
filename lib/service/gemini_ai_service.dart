@@ -31,14 +31,15 @@ class GeminiAiService {
     4. If the receipts is not bank receipts, set 'status' to 'invalid'.
     5. If the image detected have multiple receipts / document, set as 'multiple_detected' and set 'reason' to 'Please scan only one receipt at a time for better accuracy.'
     6. If the image quality is acceptable, set 'status' to 'clear' and extract the following information:
-    - Bank name (bankName)
+    - Bank name (bank)
     - Bank account (bankAcc)
     - Total amount (totalAmount)
     - Transfer date (transferDate)
+    - Location (location)
     The output must be in strict JSON format:
     {
       "data": {
-        "bankName": "string",
+        "bank": "string",
         "bankAcc": "string",
         "totalAmount": number,
         "transferDate": "string",

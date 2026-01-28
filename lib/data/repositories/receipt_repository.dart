@@ -5,6 +5,7 @@ import 'dart:convert';
 import '../model/receipt.dart';
 import '../../service/firebase_firestore_service.dart';
 import 'dart:typed_data';
+import 'package:path/path.dart' as p;
 
 class ReceiptRepository {
 
@@ -69,7 +70,7 @@ class ReceiptRepository {
           minWidth: 800,
           quality: 50,
           format: CompressFormat.jpeg,
-        ) ?? bytes;
+        );
 
         totalSize += compressedBytes.length;
         base64List.add(base64Encode(compressedBytes));
@@ -84,7 +85,7 @@ class ReceiptRepository {
       // 3. 构造存入 Firestore 的 Map (字段必须和你的 toJson/fromJson 一一对应)
       final Map<String, dynamic> receiptData = {
         'receiptId': uid,
-        'receiptName': files.isNotEmpty ? files.first.name : "Unknown_Scan",
+        'receiptName': files.isNotEmpty ? fileName : "Unknown_Scan",
         'receiptImg': base64List,
         'staffId': staffId,
         'staffName': staffName,
@@ -100,7 +101,7 @@ class ReceiptRepository {
 
       return Receipt.fromJson({
         ...receiptData,
-        'createdAt': DateTime.now(),
+        'createdAt': DateTime.now().toIso8601String(),
       });
     } catch (e) {
       print("❌ uploadReceipt Error: $e");

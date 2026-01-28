@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:sc/presentation/screens/receipt_detail_page.dart';
 import 'package:sc/service/document_scanner_service.dart';
 import 'package:sc/application/receipt_provider.dart';
 import 'package:cross_file/cross_file.dart';
@@ -33,10 +34,14 @@ class _ScanPageState extends State<ScanPage> {
     });
     try {
       final images = await DocumentScannerService().scanDocument();
-      setState(() {
-        _images = images;
-        _scanned = true;
-      });
+      if (images.isNotEmpty) {
+        // Process the scanned images and navigate to detail page
+        await _processAndNavigateToDetail(images);
+      } else {
+        setState(() {
+          _scanned = true;
+        });
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -45,7 +50,7 @@ class _ScanPageState extends State<ScanPage> {
     }
   }
 
-  Future<void> _saveReceipt() async {
+  Future<void> _processAndNavigateToDetail(List<String> images) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) {
@@ -56,44 +61,49 @@ class _ScanPageState extends State<ScanPage> {
       return;
     }
 
-    if (_images == null || _images!.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please scan a document first')),
-        );
-      }
-      return;
-    }
-
     try {
       // Convert File paths to XFile
-      final xFiles = _images!.map((path) => XFile(path)).toList();
+      final xFiles = images.map((path) => XFile(path)).toList();
 
-      // Call Provider to upload
-      await context.read<ReceiptProvider>().processScanAndUpload(
+      // Process scan (OCR only, don't upload yet)
+      final processedReceipt = await context.read<ReceiptProvider>().processScanOnly(
         staffId: user.uid,
         staffName: user.displayName ?? 'Unknown',
         files: xFiles,
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Receipt saved successfully'),
-            backgroundColor: Colors.green,
+      if (context.mounted) {
+        // Navigate to detail page in confirmation mode
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ReceiptDetailPage(
+              receipt: processedReceipt,
+              isConfirmationMode: true,
+              scannedFiles: xFiles,
+            ),
           ),
         );
-        // Return to home screen
-        Navigator.pop(context);
+
+        // Handle result
+        if (result == 'rescan') {
+          _startScan(); // Rescan
+        } else if (result == 'success') {
+          Navigator.pop(context); // Return to previous screen
+        }
       }
     } catch (e) {
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Save failed: $e'),
+            content: Text('Processing failed: $e'),
             backgroundColor: Colors.red,
           ),
         );
+        setState(() {
+          _error = e.toString();
+          _scanned = true;
+        });
       }
     }
   }
@@ -110,111 +120,61 @@ class _ScanPageState extends State<ScanPage> {
   Widget build(BuildContext context) {
     if (!_scanned) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Scanning document...'),
+            ],
+          ),
+        ),
       );
     }
     if (_error != null) {
       return Scaffold(
-        body: Center(child: Text('Scan failed: $_error')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              Text('Scan failed: $_error'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _startScan,
+                child: const Text('Try Again'),
+              ),
+            ],
+          ),
+        ),
       );
     }
     if (_images == null || _images!.isEmpty) {
-      return const Scaffold(
-        body: Center(child: Text('No document scanned.')),
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.document_scanner, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text('No document scanned.'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _startScan,
+                child: const Text('Scan Again'),
+              ),
+            ],
+          ),
+        ),
       );
     }
-    
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scan Results'),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: _images!.length,
-              itemBuilder: (context, idx) {
-                return Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Image.file(
-                    File(_images![idx]),
-                    fit: BoxFit.contain,
-                    height: 300,
-                  ),
-                );
-              },
-            ),
-          ),
-          // Action buttons
-          Consumer<ReceiptProvider>(
-            builder: (context, provider, _) {
-              return Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    // Save button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: provider.isLoading ? null : _saveReceipt,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          backgroundColor: Colors.green,
-                        ),
-                        child: provider.isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation(Colors.white),
-                                ),
-                              )
-                            : const Text(
-                                'Save',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Rescan and Cancel buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: provider.isLoading ? null : _rescan,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              backgroundColor: Colors.blue,
-                            ),
-                            child: const Text(
-                              'Rescan',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: provider.isLoading ? null : _cancel,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              backgroundColor: Colors.grey,
-                            ),
-                            child: const Text(
-                              'Cancel',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
+
+    // This should not be reached since we navigate immediately after processing
+    return const Scaffold(
+      body: Center(
+        child: Text('Processing...'),
       ),
     );
   }
