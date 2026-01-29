@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -17,7 +15,7 @@ class ScanPage extends StatefulWidget {
 
 class _ScanPageState extends State<ScanPage> {
   String? _error;
-  List<String>? _images;
+  String? _imagePath;
   bool _scanned = false;
 
   @override
@@ -29,19 +27,12 @@ class _ScanPageState extends State<ScanPage> {
   Future<void> _startScan() async {
     setState(() {
       _error = null;
-      _images = null;
+      _imagePath = null;
       _scanned = false;
     });
     try {
-      final images = await DocumentScannerService().scanDocument();
-      if (images.isNotEmpty) {
-        // Process the scanned images and navigate to detail page
-        await _processAndNavigateToDetail(images);
-      } else {
-        setState(() {
-          _scanned = true;
-        });
-      }
+      final imagePath = await DocumentScannerService().scanDocument();
+      await _processAndNavigateToDetail(imagePath);
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -50,7 +41,7 @@ class _ScanPageState extends State<ScanPage> {
     }
   }
 
-  Future<void> _processAndNavigateToDetail(List<String> images) async {
+  Future<void> _processAndNavigateToDetail(String imagePath) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) {
@@ -62,14 +53,13 @@ class _ScanPageState extends State<ScanPage> {
     }
 
     try {
-      // Convert File paths to XFile
-      final xFiles = images.map((path) => XFile(path)).toList();
+      final xFile = XFile(imagePath);
 
-      // Process scan (OCR only, don't upload yet)
+      // Process scan (OCR only, no upload yet)
       final processedReceipt = await context.read<ReceiptProvider>().processScanOnly(
         staffId: user.uid,
         staffName: user.displayName ?? 'Unknown',
-        files: xFiles,
+        file: xFile,
       );
 
       if (context.mounted) {
@@ -80,16 +70,15 @@ class _ScanPageState extends State<ScanPage> {
             builder: (context) => ReceiptDetailPage(
               receipt: processedReceipt,
               isConfirmationMode: true,
-              scannedFiles: xFiles,
+              scannedFile: xFile,
             ),
           ),
         );
 
-        // Handle result
         if (result == 'rescan') {
-          _startScan(); // Rescan
+          _startScan();
         } else if (result == 'success') {
-          Navigator.pop(context); // Return to previous screen
+          if (mounted) Navigator.pop(context);
         }
       }
     } catch (e) {
@@ -108,14 +97,6 @@ class _ScanPageState extends State<ScanPage> {
     }
   }
 
-  void _rescan() {
-    _startScan();
-  }
-
-  void _cancel() {
-    Navigator.pop(context);
-  }
-
   @override
   Widget build(BuildContext context) {
     if (!_scanned) {
@@ -132,26 +113,16 @@ class _ScanPageState extends State<ScanPage> {
         ),
       );
     }
+
+    //fix the black splash screen: old is just direct pop
     if (_error != null) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error, size: 64, color: Colors.red),
-              const SizedBox(height: 16),
-              Text('Scan failed: $_error'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _startScan,
-                child: const Text('Try Again'),
-              ),
-            ],
-          ),
-        ),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+      });
     }
-    if (_images == null || _images!.isEmpty) {
+    if (_imagePath == null || _imagePath!.isEmpty) {
       return Scaffold(
         body: Center(
           child: Column(

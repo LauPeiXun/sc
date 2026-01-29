@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:sc/data/model/receipt.dart';
@@ -8,116 +10,118 @@ import '../../application/receipt_provider.dart';
 class ReceiptDetailPage extends StatelessWidget {
   final Receipt receipt;
   final bool isConfirmationMode;
-  final List<XFile>? scannedFiles;
+  final XFile? scannedFile;
 
   const ReceiptDetailPage({
     super.key,
     required this.receipt,
     this.isConfirmationMode = false,
-    this.scannedFiles,
+    this.scannedFile,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(isConfirmationMode ? 'Confirm Receipt' : 'Receipt Details'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pop(context, 'success');
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(isConfirmationMode ? 'Confirm Receipt' : 'Receipt Details'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context),
+          ),
         ),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Bank information
-                  _buildSection(
-                    title: 'Bank Information',
-                    children: [
-                      _buildInfoRow('Bank', receipt.bank.isEmpty ? '-' : receipt.bank),
-                      _buildInfoRow('Bank Account', receipt.bankAcc.isEmpty ? '-' : receipt.bankAcc),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  // Transfer information
-                  _buildSection(
-                    title: 'Transfer Information',
-                    children: [
-                      _buildInfoRow('Transfer Date', receipt.transferDate.isEmpty ? '-' : receipt.transferDate),
-                      _buildInfoRow(
-                        'Amount',
-                        'RM ${receipt.totalAmount.toStringAsFixed(2)}',
-                        isBold: true,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  // Status
-                  _buildSection(
-                    title: 'Status',
-                    children: [
-                      _buildStatusBadge(receipt.status),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  // Staff information
-                  _buildSection(
-                    title: 'Staff Information',
-                    children: [
-                      _buildInfoRow('Staff Name', receipt.staffName),
-                      _buildInfoRow('Staff ID', receipt.staffId),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  // Receipt images
-                  if (receipt.receiptImg.isNotEmpty)
+        body: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Bank information
                     _buildSection(
-                      title: 'Receipt Images',
+                      title: 'Bank Information',
                       children: [
-                        SizedBox(
-                          height: 300,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: receipt.receiptImg.length,
-                            itemBuilder: (context, index) {
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 12.0),
-                                child: GestureDetector(
-                                  onTap: () => _showFullScreenImage(context, receipt.receiptImg[index]),
-                                  child: Hero(
-                                    tag: 'receipt_image_$index',
-                                    child: Image.memory(
-                                      base64Decode(receipt.receiptImg[index]),
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                        _buildInfoRow('Bank', receipt.bank.isEmpty ? '-' : receipt.bank),
+                        _buildInfoRow('Bank Account', receipt.bankAcc.isEmpty ? '-' : receipt.bankAcc),
+                        _buildInfoRow('Location', receipt.location.isEmpty ? '-' : receipt.location),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Transfer information
+                    _buildSection(
+                      title: 'Transfer Information',
+                      children: [
+                        _buildInfoRow('Printed Date', receipt.printedDate.isEmpty ? '-' : receipt.printedDate),
+                        _buildInfoRow('Handwritten Date', receipt.handwrittenDate.isEmpty ? '-' : receipt.handwrittenDate),
+                        _buildInfoRow(
+                          'Amount',
+                          'RM ${receipt.totalAmount.toStringAsFixed(2)}',
+                          isBold: true,
                         ),
                       ],
                     ),
-                ],
+                    const SizedBox(height: 24),
+
+                    // Status
+                    _buildSection(
+                      title: 'Status',
+                      children: [
+                        _buildStatusBadge(receipt.status),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Staff information
+                    _buildSection(
+                      title: 'Staff Information',
+                      children: [
+                        _buildInfoRow('Staff Name', receipt.staffName),
+                        _buildInfoRow('Staff ID', receipt.staffId),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Receipt images
+                    if (receipt.receiptImg.isNotEmpty)
+                      _buildSection(
+                        title: 'Receipt Image',
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: GestureDetector(
+                              onTap: () => _showFullScreenImage(context, receipt.receiptImg),
+                              child: Hero(
+                                tag: 'receipt_image_single',
+                                child: Image.memory(
+                                  base64Decode(receipt.receiptImg),
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: 600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
+        bottomNavigationBar: isConfirmationMode
+            ? SafeArea(
+          child: _buildActionButtons(context),
+        )
+            : null,
       ),
-      bottomNavigationBar: isConfirmationMode
-          ? SafeArea(
-              child: _buildActionButtons(context),
-            )
-          : null,
     );
   }
 
@@ -241,17 +245,6 @@ class ReceiptDetailPage extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: ElevatedButton(
-              onPressed: () => _handleSave(context),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                backgroundColor: Colors.green,
-              ),
-              child: const Text('Save Receipt'),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
             child: OutlinedButton(
               onPressed: () => Navigator.pop(context, 'rescan'),
               style: OutlinedButton.styleFrom(
@@ -260,15 +253,27 @@ class ReceiptDetailPage extends StatelessWidget {
               child: const Text('Rescan'),
             ),
           ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () => _handleSave(context),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Save Receipt'),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Future<void> _handleSave(BuildContext context) async {
-    if (scannedFiles == null || scannedFiles!.isEmpty) {
+    if (scannedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No images to save')),
+        const SnackBar(content: Text('No image to save')),
       );
       return;
     }
@@ -282,7 +287,7 @@ class ReceiptDetailPage extends StatelessWidget {
 
       // Call Provider to save the current receipt
       await context.read<ReceiptProvider>().uploadCurrentReceipt(
-        files: scannedFiles!,
+        file: scannedFile!,
       );
 
       if (context.mounted) {

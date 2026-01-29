@@ -31,69 +31,69 @@ class ReceiptRepository {
     }
   }
 
-  Future<Map<String, dynamic>> recognizeReceipt(List<Uint8List> imageBytes) async {
+  Future<Map<String, dynamic>?> recognizeReceipt(Uint8List imageBytes) async {
     try {
-      final String? jsonString = await _geminiAiService.processImages(imageBytes);
-      if (jsonString == null) throw Exception("AI no response");
+      final String? jsonString = await _geminiAiService.processImage(imageBytes);
+      if (jsonString == null) return null;
 
-      final Map<String, dynamic> responseMap = jsonDecode(jsonString);
+      final dynamic decoded = jsonDecode(jsonString);
+
+      Map<String, dynamic> responseMap;
+      if (decoded is List) {
+        if (decoded.isNotEmpty) {
+          responseMap = decoded.first as Map<String, dynamic>;
+        } else {
+          return null;
+        }
+      } else {
+        responseMap = decoded as Map<String, dynamic>;
+      }
       final Map<String, dynamic> data = responseMap['data'] ?? {};
+      final String status = data['status'] ?? 'unclear';
 
-      if (responseMap['status'] == 'unclear') {
-        throw Exception("Blurred image: ${responseMap['reason']}");
+      if (status == 'clear' || status == 'multiple_detected' || status == 'invalid' || status == 'unclear') {
+        return data;
       }
-      if (responseMap['status'] == 'multiple_detected') {
-        throw Exception("Detected multiple receipts: ${responseMap['reason']}");
-      }
-      return data;
+
+      return null;
     } catch (e) {
       print("❌ OCR Error: $e");
-      rethrow;
+      return null;
     }
   }
+
 
   Future<Receipt> uploadReceipt({
     required String staffId,
     required String staffName,
-    required List<XFile> files,
+    required XFile file,
     required Map<String, dynamic> ocrData,
   }) async {
     try {
-      List<String> base64List = [];
-      int totalSize = 0;
-
-      for (var file in files) {
-        final bytes = await file.readAsBytes();
-
-        final compressedBytes = await FlutterImageCompress.compressWithList(
-          bytes,
-          minWidth: 800,
-          quality: 50,
-          format: CompressFormat.jpeg,
-        );
-
-        totalSize += compressedBytes.length;
-        base64List.add(base64Encode(compressedBytes));
-      }
-
-      if (totalSize > 950000) {
-        throw Exception("图片太大，Firestore 塞不下了！请减少页数或降低质量。");
-      }
-
+      final bytes = await file.readAsBytes();
+      final compressedBytes = await FlutterImageCompress.compressWithList(
+        bytes,
+        minWidth: 800,
+        quality: 50,
+        format: CompressFormat.jpeg,
+      );
+      final String base64Image = base64Encode(compressedBytes);
       final uid = _firestoreService.generateDocId(collectionName);
+      String fileName = p.basenameWithoutExtension(file.name);
 
-      // 3. 构造存入 Firestore 的 Map (字段必须和你的 toJson/fromJson 一一对应)
       final Map<String, dynamic> receiptData = {
         'receiptId': uid,
-        'receiptName': files.isNotEmpty ? fileName : "Unknown_Scan",
-        'receiptImg': base64List,
+        'receiptName': fileName,
+        'receiptImg': base64Image,
         'staffId': staffId,
         'staffName': staffName,
         'createdAt': FieldValue.serverTimestamp(),
         'bank': ocrData['bankName'] ?? '',
         'bankAcc': ocrData['bankAcc'] ?? '',
-        'totalAmount': (ocrData['totalAmount'] ?? 0.0).toDouble(),
-        'transferDate': ocrData['transferDate'] ?? '',
+        'totalAmount': _parseDouble(ocrData['totalAmount']),
+        'printedDate': ocrData['printedDate'] ?? '',
+        'handwrittenDate': ocrData['handwrittenDate'] ?? '',
+        'location': ocrData['location'] ?? '',
         'status': ocrData['status'] ?? 'unknown',
       };
 
@@ -108,12 +108,20 @@ class ReceiptRepository {
       rethrow;
     }
   }
+  double _parseDouble(dynamic value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) {
+      return double.tryParse(value) ?? 0.0;
+    }
+    return 0.0;
+  }
+
   Future<void> deleteReceipt(String receiptId) async {
     try {
       // Delete from both collections
       final batch = FirebaseFirestore.instance.batch();
       batch.delete(FirebaseFirestore.instance.collection('receipt').doc(receiptId));
-      batch.delete(FirebaseFirestore.instance.collection('report').doc(receiptId));
       await batch.commit();
       print("✅ Successfully deleted receipt: $receiptId");
     } catch (e) {
@@ -121,5 +129,4 @@ class ReceiptRepository {
       rethrow;
     }
   }
-
 }

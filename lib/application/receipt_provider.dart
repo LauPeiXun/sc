@@ -1,7 +1,5 @@
-import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:cross_file/cross_file.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../data/repositories/receipt_repository.dart';
 import '../data/model/receipt.dart';
@@ -45,43 +43,37 @@ class ReceiptProvider extends ChangeNotifier {
   Future<Receipt> processScanOnly({
     required String staffId,
     required String staffName,
-    required List<XFile> files,
+    required XFile file,
   }) async {
     _setLoading(true);
     _setError(null);
     try {
-      List<Uint8List> imageBytes = <Uint8List>[];
-      for (var f in files) {
-        imageBytes.add(await f.readAsBytes());
-      }
-
+      final imageBytes = await file.readAsBytes();
       final ocrData = await _receiptRepository.recognizeReceipt(imageBytes);
 
-      // Create base64 images for display
-      List<String> base64List = [];
-      for (var file in files) {
-        final bytes = await file.readAsBytes();
-        final compressedBytes = await FlutterImageCompress.compressWithList(
-          bytes,
-          minWidth: 800,
-          quality: 50,
-          format: CompressFormat.jpeg,
-        );
-        base64List.add(base64Encode(compressedBytes));
-      }
+      // Create base64 image for display
+      final compressedBytes = await FlutterImageCompress.compressWithList(
+        imageBytes,
+        minWidth: 800,
+        quality: 50,
+        format: CompressFormat.jpeg,
+      );
+      final base64Image = base64Encode(compressedBytes);
 
       final receipt = Receipt(
         receiptId: '',
-        receiptName: ocrData['receiptName'] ?? '',
-        receiptImg: base64List,
+        receiptName: ocrData?['receiptName'] ?? '',
+        receiptImg: base64Image,
         staffId: staffId,
         staffName: staffName,
         createdAt: DateTime.now(),
-        bank: ocrData['bank'] ?? '',
-        bankAcc: ocrData['bankAcc'] ?? '',
-        totalAmount: (ocrData['totalAmount'] is num) ? (ocrData['totalAmount'] as num).toDouble() : 0.0,
-        transferDate: ocrData['transferDate'] ?? '',
-        status: ocrData['status'] ?? 'Unclear',
+        bank: ocrData?['bank'] ?? '',
+        bankAcc: ocrData?['bankAcc'] ?? '',
+        totalAmount: (ocrData?['totalAmount'] is num) ? (ocrData?['totalAmount'] as num).toDouble() : 0.0,
+        printedDate: ocrData?['printedDate'] ?? '',
+        handwrittenDate: ocrData?['handwrittenDate'] ?? '',
+        location: ocrData?['location'] ?? '',
+        status: ocrData?['status'] ?? 'Unclear',
       );
 
       _currentReceipt = receipt;
@@ -96,7 +88,7 @@ class ReceiptProvider extends ChangeNotifier {
   }
 
   Future<void> uploadCurrentReceipt({
-    required List<XFile> files,
+    required XFile file,
   }) async {
     if (_currentReceipt == null) {
       throw Exception('No receipt to upload.');
@@ -108,12 +100,14 @@ class ReceiptProvider extends ChangeNotifier {
       final uploaded = await _receiptRepository.uploadReceipt(
         staffId: _currentReceipt!.staffId,
         staffName: _currentReceipt!.staffName,
-        files: files,
+        file: file,
         ocrData: {
           'bankName': _currentReceipt!.bank,
           'bankAcc': _currentReceipt!.bankAcc,
           'totalAmount': _currentReceipt!.totalAmount,
-          'transferDate': _currentReceipt!.transferDate.toString(),
+          'printedDate': _currentReceipt!.printedDate.toString(),
+          'handwrittenDate': _currentReceipt!.handwrittenDate.toString(),
+          'location': _currentReceipt!.location.toString(),
           'status': _currentReceipt!.status,
         },
       );

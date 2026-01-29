@@ -3,14 +3,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Receipt {
   final String receiptId;
   final String receiptName;
-  final List<String> receiptImg;
+  final String receiptImg;
   final String staffId;
   final String staffName;
   final DateTime createdAt;
   final String bank;
   final String bankAcc;
   final double totalAmount;
-  final String transferDate;
+  final String printedDate;
+  final String handwrittenDate;
+  final String location;
   final String status;
 
   Receipt({
@@ -23,16 +25,17 @@ class Receipt {
     required this.bank,
     required this.bankAcc,
     required this.totalAmount,
-    required this.transferDate,
+    required this.printedDate,
+    required this.handwrittenDate,
+    required this.location,
     required this.status,
-
   });
 
   factory Receipt.fromJson(Map<String, dynamic> json){
     return Receipt(
         receiptId: json['receiptId'] ?? '',
         receiptName: json['receiptName'] ?? '',
-        receiptImg: List<String> .from(json['receiptImg'] ?? []),
+        receiptImg: json['receiptImg']?.toString() ?? '',
         staffId: json['staffId'] ?? '',
         staffName: json['staffName'] ?? '',
         createdAt: json['createdAt'] is Timestamp
@@ -43,7 +46,9 @@ class Receipt {
         totalAmount: (json['totalAmount'] is num)
             ? (json['totalAmount'] as num).toDouble()
             : double.tryParse(json['totalAmount']?.toString() ?? '0') ?? 0.0,
-        transferDate: json['transferDate'] ?? '',
+        printedDate: json['printedDate'] ?? '',
+        handwrittenDate: json['handwrittenDate'] ?? '',
+        location: json['location'] ?? '',
         status: json['status'] ?? '',
     );
   }
@@ -59,7 +64,9 @@ class Receipt {
       'bank': bank,
       'bankAcc': bankAcc,
       'totalAmount': totalAmount,
-      'transferDate': transferDate,
+      'printedDate': printedDate,
+      'handwrittenDate': handwrittenDate,
+      'location': location,
       'status': status
     };
   }

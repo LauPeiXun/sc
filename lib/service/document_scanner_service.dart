@@ -3,60 +3,49 @@ import 'package:flutter_doc_scanner/flutter_doc_scanner.dart';
 import 'dart:io';
 
 class DocumentScannerService {
-  Future<List<String>> scanDocument() async {
+  Future<String> scanDocument() async {
     dynamic result;
 
     try {
-      result = await FlutterDocScanner().getScannedDocumentAsImages(page: 4);
+      result = await FlutterDocScanner().getScannedDocumentAsImages(page: 1);
     } on PlatformException catch (e) {
       throw Exception('Scanner Error: $e');
     }
 
     if (result == null) {
-      return [];
+      throw Exception('No image captured');
     }
 
-    List<String> imagePaths = [];
+    String imagePath = '';
 
     if (result is List && result.isNotEmpty) {
-      for (var item in result) {
-        imagePaths.add(item.toString());
-      }
+      imagePath = result.first.toString();
     } else if (result is Map) {
-      if (result.containsKey('images') && result['images'] is List) {
-        for (var item in result['images']) {
-          imagePaths.add(item.toString());
-        }
+      if (result.containsKey('images') && result['images'] is List && (result['images'] as List).isNotEmpty) {
+        imagePath = (result['images'] as List).first.toString();
       } else if (result.containsKey('imageUri')) {
-        imagePaths.add(result['imageUri'].toString());
+        imagePath = result['imageUri'].toString();
       }
+    } else if (result is String) {
+      imagePath = result;
     }
 
-    if (imagePaths.isEmpty) {
-      return [];
+    if (imagePath.isEmpty) {
+      throw Exception('No valid image path');
     }
 
-    List<String> validPaths = [];
-    for (var path in imagePaths) {
-      String cleanPath = path;
-      if (cleanPath.startsWith('file://')) {
-        cleanPath = cleanPath.replaceFirst('file://', '');
-      }
-      
-      final file = File(cleanPath);
-      if (await file.exists()) {
-        final fileSize = await file.length();
-        print("Image found: $cleanPath (${(fileSize / 1024).toStringAsFixed(2)} KB)");
-        validPaths.add(cleanPath);
-      } else {
-        print("Image not found: $cleanPath");
-      }
+    String cleanPath = imagePath;
+    if (cleanPath.startsWith('file://')) {
+      cleanPath = cleanPath.replaceFirst('file://', '');
     }
-
-    if (validPaths.isEmpty) {
-      throw Exception('No valid images found');
+    
+    final file = File(cleanPath);
+    if (await file.exists()) {
+      final fileSize = await file.length();
+      print("Image found: $cleanPath (${(fileSize / 1024).toStringAsFixed(2)} KB)");
+      return cleanPath;
+    } else {
+      throw Exception('Image not found: $cleanPath');
     }
-
-    return validPaths;
   }
 }

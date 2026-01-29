@@ -147,18 +147,17 @@ class _HomePageState extends State<HomePage> {
           children: [
             Expanded(child: _buildInfoCard("Total Scans", "${docs.length}", Icons.document_scanner, Colors.blue)),
             const SizedBox(width: 16),
-            Expanded(child: _buildInfoCard("This $_mode", "${_filterDocs(docs).length}", Icons.analytics, Colors.black)),
+            Expanded(child: _buildInfoCard(_mode, "${_filterDocs(docs).length}", Icons.analytics, Colors.orange)),
           ],
         ),
         Row (
           children: [
-            Expanded(child: _buildInfoCard(" Clear", "${clearCount}", Icons.done_outline_outlined, Colors.green)),
+            Expanded(child: _buildInfoCard(" Clear", "$clearCount", Icons.done_outline_outlined, Colors.green)),
             const SizedBox(width: 16),
-            Expanded(child: _buildInfoCard("Unclear", "${unclearCount}", Icons.error_outline, Colors.red)),
+            Expanded(child: _buildInfoCard("Unclear", "$unclearCount", Icons.error_outline, Colors.red)),
           ],
         )
       ],
-
     );
   }
 
