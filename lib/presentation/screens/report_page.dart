@@ -116,24 +116,13 @@ class _ReportPageState extends State<ReportPage> {
 
           final docs = snapshot.data?.docs ?? [];
 
-          double totalSpent = 0.0;
-          double thisMonthSpent = 0.0;
+          double totalTransfer = 0.0;
           int receiptCount = docs.length;
-
-          final now = DateTime.now();
 
           for (var doc in docs) {
             final data = doc.data() as Map<String, dynamic>;
             double totalAmount = _parseAmount(data['totalAmount']);
-
-            Timestamp? t = data['createdAt'] as Timestamp?;
-            DateTime date = t?.toDate() ?? DateTime.now();
-
-            totalSpent += totalAmount;
-
-            if (date.year == now.year && date.month == now.month) {
-              thisMonthSpent += totalAmount;
-            }
+            totalTransfer += totalAmount;
           }
 
           return SingleChildScrollView(
@@ -145,7 +134,7 @@ class _ReportPageState extends State<ReportPage> {
                   children: [
                     Expanded(child: _buildStatCard("Receipts", "$receiptCount", Icons.receipt_long, Colors.blue)),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildStatCard("Avg. Receipt", "RM ${(totalSpent / (receiptCount == 0 ? 1 : receiptCount)).toStringAsFixed(0)}", Icons.analytics, Colors.orange)),
+                    Expanded(child: _buildStatCard("Total Amount", "RM ${(totalTransfer.toStringAsFixed(2))}", Icons.attach_money, Colors.orange)),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -304,7 +293,7 @@ class _ReportPageState extends State<ReportPage> {
           // Data Extraction
           final receiptName = data['receiptName'] ?? 'Receipt';
           final totalAmount = _parseAmount(data['totalAmount']);
-          final receiptImg = data['receiptImg'] as List<dynamic>? ?? [];
+          final receiptImg = data['receiptImg'] is String ? [data['receiptImg']] : (data['receiptImg'] as List<dynamic>? ?? []);
           final status = data['status'] ?? 'Unclear';
 
           final Timestamp? timestamp = data['createdAt'] as Timestamp?;
@@ -354,25 +343,34 @@ class _ReportPageState extends State<ReportPage> {
                 ),
               ],
             ),
-            subtitle: Text("Scan at: ${dateStr}"),
+            subtitle: Text("Scan at: $dateStr"),
             trailing: Text(
                 "RM ${totalAmount.toStringAsFixed(2)}",
                 style: const TextStyle(
                     fontWeight: FontWeight.bold, fontSize: 16)
             ),
             onTap: () {
-              // Build Receipt object from Firestore data
+              String imageString = "";
+              if (data['receiptImg'] is String) {
+                imageString = data['receiptImg'];
+              } else if (data['receiptImg'] is List && (data['receiptImg'] as List).isNotEmpty) {
+                imageString = data['receiptImg'][0];
+              }
+
+
               final receipt = Receipt(
                 receiptId: filteredDocs[index].id,
                 receiptName: receiptName,
-                receiptImg: receiptImg.cast<String>().toList(),
+                receiptImg: imageString,
                 staffId: data['staffId'] ?? '',
                 staffName: data['staffName'] ?? '',
                 createdAt: createdAt,
                 bank: data['bank'] ?? '',
                 bankAcc: data['bankAcc'] ?? '',
                 totalAmount: totalAmount ?? 0.0,
-                transferDate: data['transferDate'] ?? '',
+                printedDate: data['printedDate'] ?? '',
+                handwrittenDate: data['handwrittenDate'] ?? '',
+                location: data['location'] ?? '',
                 status: status,
               );
 

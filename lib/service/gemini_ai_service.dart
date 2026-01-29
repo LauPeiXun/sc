@@ -21,50 +21,76 @@ class GeminiAiService {
     );
   }
 
-  Future<String?> processImages(List<Uint8List> imageBytes) async {
+  Future<String?> processImage(Uint8List imageBytes) async {
     const prompt = """
-    You are a document scanning assistant.
-    Please analyze the provided image (which may be a split image of one or more long receipts):
-    1. Evaluate the image quality (clarity, lighting).
-    2. Check if there are MULTIPLE different receipts / documents in a single view
-    3. If the image quality is too poor (key information is illegible), set 'status' to 'unclear'.
-    4. If the receipts is not bank receipts, set 'status' to 'invalid'.
-    5. If the image detected have multiple receipts / document, set as 'multiple_detected' and set 'reason' to 'Please scan only one receipt at a time for better accuracy.'
-    6. If the image quality is acceptable, set 'status' to 'clear' and extract the following information:
-    - Bank name (bank)
-    - Bank account (bankAcc)
-    - Total amount (totalAmount)
-    - Transfer date (transferDate)
-    - Location (location)
-    The output must be in strict JSON format:
+    You are a professional financial document parser. 
+    Analyze the image and return a strict JSON response.
+    
+    1. QUALITY CHECK & STATUS LOGIC:
+       - If more than 1 distinct receipt or transaction slip is detected in the image:
+         Set Status = "multiple_detected" IMMEDIATELY and skip extraction
+       - MANDATORY FIELDS: 'bank', 'bankAcc', 'totalAmount', 'location' and at least one 'date'.
+       - STATUS RULE: 
+         * If all Mandatory Fields are found for a SINGLE receipt: status = "clear".
+         * If ANY Mandatory Field is null, status MUST be "unclear".
+         * If NOT a bank receipt, even got Mandatory Field: status = "invalid".
+    
+    2. DATA EXTRACTION (Only if status is "clear"):
+       - Only perform full extraction if status is "clear".
+       - If status is "multiple_detected", "unclear", or "invalid", return null or empty strings for the data fields.
+       
+       - bank: Full bank name.
+       - bankAcc: Recipient/Target account number.
+       - totalAmount: Numerical value only (MUST NOT be null if status is clear).
+    
+       - printedDate: 
+         * Look for MACHINE-GENERATED, FIXED-FONT text. 
+         * Usually located near the top or bottom of the slip, often next to "DATE" or "TIME".
+         * Format: DD/MM/YYYY.
+    
+       - handwrittenDate: 
+         * Look for HANDWRITTEN, PEN-INK text (usually cursive or informal).
+         * This is often written by the customer in empty spaces.
+         * If NO pen-ink handwriting is seen, return null. 
+         * Format: DD/MM/YYYY.
+    
+       - location: Prioritize System Printed, then Handwritten.
+       * Format: 1009 ALAM MELATI
+       * Written by the customer 
+    
+    3. OUTPUT FORMAT (Strict JSON):
+    Return ONLY a single JSON object. If multiple receipts are found, return the most prominent one and set status to "multiple_detected".
     {
       "data": {
         "bank": "string",
         "bankAcc": "string",
         "totalAmount": number,
-        "transferDate": "string",
-        "status": "clear" | "unclear" | "multiple_detected | "invalid"
+        "printedDate": "string",
+        "handwrittenDate": "string",
+        "location": "string",
+        "status": "clear" | "unclear" | "multiple_detected" | "invalid"
       }
-    }
+    }    
     """;
 
     try {
-      final List<Part> parts = [TextPart(prompt)];
+      final content = [
+        Content.multi([
+          TextPart(prompt),
+          DataPart('image/jpeg', imageBytes),
+        ])
+      ];
 
-      for (var bytes in imageBytes) {
-        parts.add(DataPart('image/jpeg', bytes));
-      }
-
-      final response = await _model.generateContent([Content.multi(parts)]);
+      final response = await _model.generateContent(content);
       final result = response.text;
-      
+
       if (result != null) {
         print("Gemini Response:\n$result");
       }
-      
+
       return result;
     } catch (e) {
-      print("Gemini Error: $e");
+      print("❌ Gemini Error: $e");
       return null;
     }
   }
